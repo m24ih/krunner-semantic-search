@@ -918,7 +918,7 @@ class SettingsDialog(QDialog):
 
         if not quiet:
             QMessageBox.information(self, "Saved", "Settings saved successfully!")
-            self.accept()
+
 
 
 def main():

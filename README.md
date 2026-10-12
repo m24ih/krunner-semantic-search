@@ -1,81 +1,175 @@
 # KRunner Semantic Search (EmbeddingGemma 2)
 
-KDE Plasma KRunner için **Google DeepMind EmbeddingGemma 2** çok modlu (multimodal) gömme modelini kullanan yerel, gizlilik odaklı ve hızlı semantik dosya arama eklentisi ve arka plan dizinleme servisi.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![KDE Plasma](https://img.shields.io/badge/KDE%20Plasma-6.x-3183cf.svg)](https://kde.org/plasma-desktop/)
+[![Model](https://img.shields.io/badge/Model-EmbeddingGemma%202%20(GGUF)-orange.svg)](https://huggingface.co/ggml-org/embeddinggemma-300M-GGUF)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-brightgreen.svg)](https://python.org)
 
-Klasik anahtar kelime eşleştirmesi yapan arama araçlarının (Baloo vb.) aksine; aradığınız dosyanın adını tam bilmeseniz bile içeriğini, anlamını veya görsel/işitsel tanımını yazarak dosyalarınıza anında erişmenizi sağlar.
+**Fast, 100% local, privacy-first semantic file search plugin and graphical manager for KDE Plasma 6 KRunner powered by Google DeepMind's EmbeddingGemma 2 model.**
 
----
-
-## 🎯 Proje Hedefleri ve Özellikler
-
-1. **Doğal Dil ile Arama:** Dosya adı hatırlanmasa dahi anlam bazlı arama (Örn: `"evcil hayvan maddesi"`, `"mavi gömlekli profil fotoğrafı"`).
-2. **KDE Plasma 6 / 5 Uyumlu KRunner D-Bus Arayüzü:** KRunner'ı yavaşlatmayan, harici D-Bus servisi (`org.kde.krunner1`).
-3. **%100 Yerel ve Gizli:** Tüm indeksleme ve sorgulama bilgisayarınızda yerel çalışır, internete hiçbir veri çıkışı yapılmaz.
-4. **Hafif ve Hızlı Çıkarım:** `llama.cpp` (veya `llama-cpp-python`) ile CPU/GPU üzerinden ~50ms yanıt süresi.
-5. **Gömülü Vektör Veritabanı:** Sunucu gerektirmeyen gömülü `sqlite-vec` (veya `sqlite` cosine similarity) depolaması.
+Unlike traditional keyword-based desktop search engines (e.g. Baloo) that strictly match exact filenames or raw substrings, **KRunner Semantic Search** understands the contextual meaning of your files. Search naturally using descriptions, concepts, or partial ideas (e.g., `"rental agreement pdf"`, `"vector database benchmark"`, `"machine learning syllabus"`) even when you cannot remember the exact file name.
 
 ---
 
-## 🏗️ Mimari Tasarım
+## ✨ Features
 
-Sistem iki ana bileşenden oluşur:
+- **100% Local & Private:** All embeddings and vector calculations run strictly on your machine. No telemetry, no cloud APIs, and zero network leakage.
+- **Hybrid Search Engine:** Combines instant lexical filename matching with dense vector KNN cosine distance (`sqlite-vec`). Searching for exact or partial file names hits immediately with 95% relevance, while conceptual queries retrieve contextual document chunks.
+- **Hardware-Aware Acceleration:** Automatically detects and offloads inference to NVIDIA CUDA (`RTX 4060` tested at ~10ms per query) with seamless graceful degradation to multi-threaded CPU mode on systems without a dedicated GPU.
+- **Native Qt6 Graphical Manager (`krunner-semantic-config`):** Modern desktop GUI to manage watched folders, view real-time indexing progress (%xx), switch compute devices, and adjust search thresholds.
+- **One-Click Model Installer:** Download and configure the official 333 MB EmbeddingGemma 2 GGUF model directly from the settings interface.
+- **Lightweight D-Bus Daemon:** Runs asynchronously via `org.kde.krunner1`, ensuring zero typing latency or UI lag inside KRunner.
+- **Comprehensive Document Parsers:** Out-of-the-box support for plain text, Markdown, codebases (`.py`, `.rs`, `.cpp`, `.json`, etc.), PDF documents (`pypdfium2`), and image metadata (`Pillow`).
+
+---
+
+## 🏗️ Architecture
 
 ```
-[ Kullanıcı (KRunner) ]
-          │  (D-Bus: org.kde.krunner1)
-          ▼
+[ KDE KRunner Interface ]
+           │  (Session D-Bus: org.kde.krunner1)
+           ▼
 ┌────────────────────────────────────────────────────────┐
-│  krunner-semantic-daemon (D-Bus Servisi)               │
-│  - Match(query): Query'yi vektörleştirir              │
-│  - EmbeddingGemma 2 Text Encoder (llama.cpp)           │
-│  - SQLite-Vec üzerinden en yakın komşuları sorgular     │
-│  - KRunner'a sonuçları, skorları ve ikonları iletir     │
+│  krunner-semantic-daemon (D-Bus Service)               │
+│  - Receives live query as you type                     │
+│  - Generates 768-dim normalized embedding vector       │
+│  - Performs hybrid query (Lexical + SQLite-Vec KNN)    │
+│  - Returns ranked results with desktop MIME icons      │
 └────────────────────────────────────────────────────────┘
-          ▲
-          │ (Okur)
-┌─────────┴──────────────────────────────────────────────┐
+           ▲
+           │ (Read)
+┌──────────┴─────────────────────────────────────────────┐
 │  ~/.local/share/krunner-semantic/index.db              │
+│  (Embedded SQLite-Vec Virtual Table)                   │
 └────────────────────────────────────────────────────────┘
-          ▲
-          │ (Yazar)
-┌─────────┴──────────────────────────────────────────────┐
-│  krunner-semantic-indexer (Arka Plan Dizinleyici)     │
-│  - Belirlenen klasörleri izler (~/Documents vb.)       │
-│  - Dosyaları parçalar (Metin, PDF, Görsel)             │
-│  - EmbeddingGemma 2 ile 768-dim vektör çıkarır         │
-│  - Veritabanına kaydeder/günceller                     │
+           ▲
+           │ (Write / Incremental Sync)
+┌──────────┴─────────────────────────────────────────────┐
+│  krunner-semantic-indexer & GUI Manager                │
+│  - Recursively watches folders (~/Documents, etc.)     │
+│  - Detects mtime/size changes with hash verification   │
+│  - Splits text into sliding window chunks              │
+│  - Calculates vectors via EmbeddingGemma 2 (CUDA/CPU)  │
 └────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 📁 Proje Dizin Yapısı
+## 🚀 Quick Installation
 
+### Option 1: Arch Linux (AUR)
+```bash
+yay -S krunner-semantic-search-git
+# or with paru:
+paru -S krunner-semantic-search-git
 ```
-krunner-semantic-search/
-├── README.md                          # Bu doküman
-├── ROADMAP.md                         # Aşama aşama geliştirme planı
-├── setup.py / pyproject.toml          # Bağımlılıklar ve paketleme
-├── desktop/
-│   └── plasma-runner-semantic.desktop # KRunner plugin kayıt dosyası
-├── systemd/
-│   └── krunner-semantic.service       # Kullanıcı systemd servis dosyası
-└── src/
-    ├── __init__.py
-    ├── daemon.py                      # org.kde.krunner1 D-Bus sunucusu
-    ├── indexer.py                     # Dosya tarama ve indeksleme motoru
-    ├── embedder.py                    # EmbeddingGemma 2 llama.cpp entegrasyonu
-    ├── storage.py                     # SQLite-Vec veri yönetim katmanı
-    └── extractors/                    # Dosya ayrıştırıcıları
-        ├── text.py                    # Düz metin / Markdown / Kod
-        ├── pdf.py                     # PDF metin çıkarımı
-        └── image.py                   # Görsel işleme / yeniden boyutlandırma
+
+### Option 2: Universal One-Liner (Any Linux Distribution)
+```bash
+curl -sSL https://raw.githubusercontent.com/m24ih/krunner-semantic-search/main/install.sh | bash
+```
+
+### Option 3: Manual Installation (From Source)
+```bash
+git clone https://github.com/m24ih/krunner-semantic-search.git
+cd krunner-semantic-search
+./install.sh
+```
+
+The installer automatically:
+1. Prepares an isolated Python virtual environment with all dependencies.
+2. Symlinks `krunner-semantic-daemon`, `krunner-semantic-indexer`, and `krunner-semantic-config` to `~/.local/bin/`.
+3. Registers the KRunner D-Bus plugin in `~/.local/share/krunner/dbusplugins/`.
+4. Installs the desktop launcher in `~/.local/share/applications/`.
+5. Enables and starts the background `systemd --user` service.
+
+---
+
+## 💡 Usage
+
+### 1. Searching in KRunner
+Press **Alt + Space** (or **Alt + F2**) to trigger KRunner:
+```text
+sem: <your natural language query>
+```
+*Examples:*
+- `sem: machine learning transcript`
+- `sem: philips coffee machine descaling`
+- `sem: yamtrack`
+- `sem: invoice 2026`
+
+Pressing **Enter** opens the file in your default desktop application, or use the action menu to open the containing folder or copy the file path.
+
+### 2. Opening the Settings GUI
+You can open the configuration interface in three ways:
+1. **Via KRunner:** Type `sem: settings` or `sem: config` and hit Enter.
+2. **Via Application Menu:** Search for **"Semantic Search Settings"**.
+3. **Via Terminal:**
+   ```bash
+   krunner-semantic-config
+   ```
+
+Inside the settings window, you can:
+- Add or remove indexed folders.
+- Click **"Download EmbeddingGemma 2 (333 MB)"** for one-click model setup.
+- Watch real-time indexing progress percentage (`xx% — Indexing: report.pdf [120/267]`).
+- Toggle between **Auto (CUDA GPU)** and **CPU** inference modes.
+
+### 3. Command Line Interface (CLI)
+
+```bash
+# Scan and index all configured watch directories incrementally:
+krunner-semantic-indexer --scan
+
+# Force re-index of all files regardless of modification time:
+krunner-semantic-indexer --scan --force
+
+# Inspect current index database statistics:
+krunner-semantic-indexer --status
+
+# Index a single file or custom directory:
+krunner-semantic-indexer --file ~/Downloads/document.pdf
+krunner-semantic-indexer --directory ~/Projects
 ```
 
 ---
 
-## 🚀 Başlangıç & Gereksinimler
+## ⚙️ Configuration File
 
-- Python 3.10+
-- KDE Plasma 5 veya 6
-- Gerekli Sistem Kütüphaneleri: `python-dasbus` (veya `dbus-next`), `llama-cpp-python`, `sqlite-vec`
+Configuration is saved in `~/.config/krunner-semantic/config.toml`:
+
+```toml
+[inference]
+# Device target: 'auto' (preferred), 'cuda', or 'cpu'
+device = "auto"
+# Path to EmbeddingGemma GGUF weights
+model_path = "~/.local/share/krunner-semantic/models/embeddinggemma-300M-Q8_0.gguf"
+
+[storage]
+db_path = "~/.local/share/krunner-semantic/index.db"
+
+[indexer]
+watch_directories = [
+    "~/Documents",
+    "~/Notes"
+]
+
+[search]
+max_results = 5
+similarity_threshold = 0.55
+```
+
+---
+
+## 🗑️ Uninstallation
+
+To cleanly remove the application, service, and plugin:
+```bash
+./uninstall.sh
+```
+
+---
+
+## 📄 License
+
+This project is licensed under the [MIT License](LICENSE).

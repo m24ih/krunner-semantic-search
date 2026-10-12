@@ -47,7 +47,14 @@ models/
 .cache/
 
 # IDE & OS
-.vscode/
-.idea/
-.DS_Store
-Thumbs.db
+# Project management & planning
+ROADMAP.md
+roadmap.md
+
+# Secrets and environment
+.env
+.env.*
+*.key
+*.pem
+credentials.json
+token*

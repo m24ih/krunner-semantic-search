@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "krunner-semantic-search"
+version = "0.1.0"
+description = "Fast, local, privacy-first semantic file search plugin for KDE Plasma KRunner powered by EmbeddingGemma 2"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "Melih AK" }
+]
+dependencies = [
+    "dbus-next>=0.2.3",
+    "sqlite-vec>=0.1.6",
+    "llama-cpp-python>=0.3.0",
+    "pypdfium2>=4.30.0",
+    "pillow>=10.0.0",
+    "PyQt6>=6.5.0",
+    "nvidia-cuda-runtime-cu12>=12.0.0; platform_system == 'Linux' and platform_machine == 'x86_64'",
+    "nvidia-cublas-cu12>=12.0.0; platform_system == 'Linux' and platform_machine == 'x86_64'",
+]
+
+[project.scripts]
+krunner-semantic-daemon = "krunner_semantic.daemon:main"
+krunner-semantic-indexer = "krunner_semantic.indexer:main"
+krunner-semantic-config = "krunner_semantic.gui:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/krunner_semantic"]

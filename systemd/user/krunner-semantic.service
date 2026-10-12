@@ -1,0 +1,15 @@
+[Unit]
+Description=KRunner Semantic Search D-Bus Service (Local AI File Search)
+Documentation=https://github.com/m24ih/krunner-semantic-search
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/krunner-semantic-daemon
+Restart=on-failure
+RestartSec=5
+Slice=app.slice
+
+[Install]
+WantedBy=graphical-session.target

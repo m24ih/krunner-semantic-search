@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=Semantic Search Settings
+Name[tr]=Semantik Arama Ayarları
+Comment=Configure indexing directories and AI model for KRunner Semantic Search
+Comment[tr]=KRunner Semantik Arama için dizinleri ve yapay zeka modelini yapılandırın
+Exec=/home/melih/Projects/krunner-semantic-search/.venv/bin/krunner-semantic-config
+Icon=preferences-system-search
+Terminal=false
+Type=Application
+Categories=Settings;DesktopSettings;Qt;KDE;
+StartupNotify=true

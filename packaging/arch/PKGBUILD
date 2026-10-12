@@ -1,0 +1,56 @@
+# Maintainer: Melih AK <m24ih>
+pkgname=krunner-semantic-search-git
+_pkgname=krunner-semantic-search
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="100% local, privacy-first semantic file search for KDE Plasma 6 KRunner powered by EmbeddingGemma 2"
+arch=('x86_64')
+url="https://github.com/m24ih/krunner-semantic-search"
+license=('MIT')
+depends=(
+    'python>=3.10'
+    'python-pyqt6'
+    'python-pillow'
+    'plasma-workspace'
+    'krunner'
+)
+makedepends=(
+    'git'
+    'python-build'
+    'python-installer'
+    'python-hatchling'
+    'python-wheel'
+)
+optdepends=(
+    'cuda: NVIDIA GPU inference acceleration (CUDA)'
+    'rocm-hip-runtime: AMD GPU inference acceleration (ROCm)'
+)
+provides=('krunner-semantic-search')
+conflicts=('krunner-semantic-search')
+source=("git+https://github.com/m24ih/krunner-semantic-search.git")
+sha256sums=('SKIP')
+
+build() {
+    cd "${srcdir}/${_pkgname}"
+    python -m build --wheel --no-isolation
+}
+
+package() {
+    cd "${srcdir}/${_pkgname}"
+    python -m installer --destdir="${pkgdir}" dist/*.whl
+
+    # KRunner D-Bus Runner registration
+    install -Dm644 desktop/plasma-runner-semantic.desktop \
+        "${pkgdir}/usr/share/krunner/dbusplugins/plasma-runner-semantic.desktop"
+
+    # Application launcher for graphical settings dialog
+    install -Dm644 desktop/krunner-semantic-config.desktop \
+        "${pkgdir}/usr/share/applications/krunner-semantic-config.desktop"
+
+    # Systemd user service
+    install -Dm644 systemd/user/krunner-semantic.service \
+        "${pkgdir}/usr/lib/systemd/user/krunner-semantic.service"
+
+    # License
+    install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE" 2>/dev/null || true
+}

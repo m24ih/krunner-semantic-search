@@ -1,0 +1,22 @@
+[Desktop Entry]
+Name=Semantic Search
+Name[tr]=Semantik Arama
+Comment=Semantic file search powered by EmbeddingGemma 2
+Comment[tr]=Yerel EmbeddingGemma 2 destekli anlamsal dosya ve belge araması
+Icon=system-search
+Type=Service
+X-KDE-ServiceTypes=Plasma/Runner
+X-KDE-PluginInfo-Name=krunner_semantic
+X-KDE-PluginInfo-Version=0.1.0
+X-KDE-PluginInfo-License=MIT
+X-KDE-PluginInfo-EnabledByDefault=true
+X-Plasma-API=DBus
+X-Plasma-DBusRunner-Service=org.kde.krunner_semantic
+X-Plasma-DBusRunner-Path=/org/kde/krunner_semantic
+X-Plasma-Request-Actions-Once=true
+X-Plasma-Runner-Min-Letter-Count=2
+X-Plasma-Runner-Unique-Results=true
+X-Plasma-Runner-Weak-Results=true
+X-Plasma-Runner-Syntaxes=sem :q:,:q:
+X-Plasma-Runner-Syntax-Descriptions=Semantic document search by meaning and content,Natural language file search
+X-Plasma-Runner-Syntax-Descriptions[tr]=Anlam ve içeriğe göre semantik belge araması,Doğal dil ile dosya araması

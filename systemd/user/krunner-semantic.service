@@ -6,7 +6,7 @@ PartOf=graphical-session.target
 
 [Service]
 Type=simple
-ExecStart=%h/.local/bin/krunner-semantic-daemon
+ExecStart=/usr/bin/krunner-semantic-daemon
 Restart=on-failure
 RestartSec=5
 Slice=app.slice

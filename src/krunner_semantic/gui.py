@@ -37,6 +37,7 @@ from PyQt6.QtWidgets import (
     QScrollArea,
     QSlider,
     QSpinBox,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -293,7 +294,8 @@ class SettingsDialog(QDialog):
         self._task_counter: int = 0
 
         self.setWindowTitle("Semantic Search Settings — KDE KRunner")
-        self.setMinimumSize(680, 700)
+        self.setMinimumSize(740, 580)
+        self.resize(780, 620)
         self.setWindowIcon(QIcon.fromTheme("system-search", QIcon.fromTheme("preferences-system-search")))
 
         self._build_ui()
@@ -301,14 +303,59 @@ class SettingsDialog(QDialog):
 
     def _build_ui(self):
         main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(14, 14, 14, 14)
         main_layout.setSpacing(12)
 
-        # 1. Watched Folders Group
-        dir_group = QGroupBox("Watched Folders (Index Directories)")
-        dir_layout = QVBoxLayout(dir_group)
+        self.tab_widget = QTabWidget()
+
+        # Tab 1: Folders & Indexing
+        tab_folders = self._build_folders_tab()
+        self.tab_widget.addTab(tab_folders, QIcon.fromTheme("folder"), "Folders && Indexing")
+
+        # Tab 2: Exclusion Rules
+        tab_exclusions = self._build_exclusions_tab()
+        self.tab_widget.addTab(tab_exclusions, QIcon.fromTheme("dialog-cancel", QIcon.fromTheme("edit-delete")), "Exclusion Rules")
+
+        # Tab 3: Model & Hardware
+        tab_model = self._build_model_tab()
+        self.tab_widget.addTab(tab_model, QIcon.fromTheme("preferences-desktop-display", QIcon.fromTheme("cpu")), "Model && Hardware")
+
+        # Tab 4: Search Tuning
+        tab_search = self._build_search_tab()
+        self.tab_widget.addTab(tab_search, QIcon.fromTheme("system-search", QIcon.fromTheme("preferences-system-search")), "Search Tuning")
+
+        main_layout.addWidget(self.tab_widget)
+
+        # Bottom Action Buttons
+        btn_box = QHBoxLayout()
+        btn_box.addStretch()
+        self.close_btn = QPushButton("Close")
+        self.close_btn.clicked.connect(self.reject)
+
+        self.save_btn = QPushButton("Save Settings")
+        self.save_btn.setIcon(QIcon.fromTheme("document-save"))
+        self.save_btn.setDefault(True)
+        self.save_btn.clicked.connect(self._on_save)
+
+        btn_box.addWidget(self.close_btn)
+        btn_box.addWidget(self.save_btn)
+        main_layout.addLayout(btn_box)
+
+        self._refresh_stats()
+
+    def _build_folders_tab(self) -> QWidget:
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(12)
+
+        # Watched Directories Group
+        folder_group = QGroupBox("Watched Directories")
+        folder_layout = QVBoxLayout(folder_group)
 
         self.dir_list = QListWidget()
-        dir_layout.addWidget(self.dir_list)
+        self.dir_list.setMinimumHeight(130)
+        folder_layout.addWidget(self.dir_list)
 
         dir_btn_layout = QHBoxLayout()
         self.add_dir_btn = QPushButton("Add Folder...")
@@ -327,137 +374,19 @@ class SettingsDialog(QDialog):
         dir_btn_layout.addWidget(self.remove_dir_btn)
         dir_btn_layout.addWidget(self.index_dir_btn)
         dir_btn_layout.addStretch()
-        dir_layout.addLayout(dir_btn_layout)
+        folder_layout.addLayout(dir_btn_layout)
 
-        # Hidden files checkbox
         self.hidden_files_cb = QCheckBox("Index hidden files and directories (names starting with '.')")
-        dir_layout.addWidget(self.hidden_files_cb)
+        folder_layout.addWidget(self.hidden_files_cb)
+        layout.addWidget(folder_group)
 
-        main_layout.addWidget(dir_group)
-
-        # 2. Hardware and Model Settings Group
-        model_group = QGroupBox("Inference Device & Embedding Model")
-        model_layout = QFormLayout(model_group)
-
-        # Device Selection
-        self.device_combo = QComboBox()
-        detected = detect_device()
-        self.device_combo.addItem(f"Auto (Recommended — Detected: {detected.upper()})", "auto")
-        self.device_combo.addItem("CUDA GPU (NVIDIA Hardware Acceleration)", "cuda")
-        self.device_combo.addItem("CPU (Pure CPU Mode)", "cpu")
-        model_layout.addRow("Compute Device:", self.device_combo)
-
-        # Model Path
-        model_file_layout = QHBoxLayout()
-        self.model_path_edit = QLineEdit()
-        self.model_path_edit.textChanged.connect(self._check_model_status)
-        self.browse_model_btn = QPushButton("Browse...")
-        self.browse_model_btn.setIcon(QIcon.fromTheme("document-open"))
-        self.browse_model_btn.clicked.connect(self._on_browse_model)
-
-        model_file_layout.addWidget(self.model_path_edit)
-        model_file_layout.addWidget(self.browse_model_btn)
-        model_layout.addRow("Model File (.gguf):", model_file_layout)
-
-        # Model Status & Download Box
-        download_box = QHBoxLayout()
-        self.model_status_label = QLabel()
-        self.download_model_btn = QPushButton("Download EmbeddingGemma 2 (333 MB)")
-        self.download_model_btn.setIcon(QIcon.fromTheme("download"))
-        self.download_model_btn.clicked.connect(self._on_download_model)
-
-        self.download_progress = QProgressBar()
-        self.download_progress.setVisible(False)
-
-        download_box.addWidget(self.model_status_label)
-        download_box.addWidget(self.download_model_btn)
-        download_box.addWidget(self.download_progress)
-        download_box.addStretch()
-        model_layout.addRow("Model Status:", download_box)
-
-        main_layout.addWidget(model_group)
-
-        # 3. File & Directory Exclusion Rules Group (Presets & Custom Regex)
-        exclude_group = QGroupBox("File & Directory Exclusion Rules (Presets & Custom Regex)")
-        exclude_layout = QVBoxLayout(exclude_group)
-        exclude_layout.setSpacing(6)
-
-        preset_header = QLabel("Predefined Exclusions (Checked = Ignored):")
-        preset_header.setStyleSheet("font-weight: bold;")
-        exclude_layout.addWidget(preset_header)
-
-        preset_grid = QGridLayout()
-        self.preset_checkboxes: dict[str, QCheckBox] = {}
-        row, col = 0, 0
-        for key, info in PRESET_EXCLUDES.items():
-            cb = QCheckBox(info["label"])
-            self.preset_checkboxes[key] = cb
-            preset_grid.addWidget(cb, row, col)
-            col += 1
-            if col >= 2:
-                col = 0
-                row += 1
-        exclude_layout.addLayout(preset_grid)
-
-        custom_header = QLabel("Custom Regular Expression Exclusion Patterns (Checked = Ignored):")
-        custom_header.setStyleSheet("font-weight: bold;")
-        exclude_layout.addWidget(custom_header)
-
-        self.custom_exclude_list = QListWidget()
-        self.custom_exclude_list.setMaximumHeight(85)
-        exclude_layout.addWidget(self.custom_exclude_list)
-
-        pattern_btn_layout = QHBoxLayout()
-        self.new_pattern_edit = QLineEdit()
-        self.new_pattern_edit.setPlaceholderText(r"e.g. \.tmp$ or secret_.* or (^|/)cache(/|$)")
-        self.new_pattern_edit.returnPressed.connect(self._on_add_custom_pattern)
-
-        self.add_pattern_btn = QPushButton("Add Pattern")
-        self.add_pattern_btn.setIcon(QIcon.fromTheme("list-add"))
-        self.add_pattern_btn.clicked.connect(self._on_add_custom_pattern)
-
-        self.remove_pattern_btn = QPushButton("Remove Selected")
-        self.remove_pattern_btn.setIcon(QIcon.fromTheme("list-remove"))
-        self.remove_pattern_btn.clicked.connect(self._on_remove_custom_pattern)
-
-        pattern_btn_layout.addWidget(self.new_pattern_edit)
-        pattern_btn_layout.addWidget(self.add_pattern_btn)
-        pattern_btn_layout.addWidget(self.remove_pattern_btn)
-        exclude_layout.addLayout(pattern_btn_layout)
-
-        main_layout.addWidget(exclude_group)
-
-        # 3. Search Tuning Group
-        search_group = QGroupBox("Search Parameters")
-        search_layout = QFormLayout(search_group)
-
-        # Max Results
-        self.max_results_spin = QSpinBox()
-        self.max_results_spin.setRange(1, 25)
-        self.max_results_spin.setValue(5)
-        search_layout.addRow("Maximum Match Results:", self.max_results_spin)
-
-        # Similarity Threshold
-        threshold_box = QHBoxLayout()
-        self.threshold_slider = QSlider(Qt.Orientation.Horizontal)
-        self.threshold_slider.setRange(10, 90)
-        self.threshold_slider.setValue(55)
-        self.threshold_val_label = QLabel("0.55")
-        self.threshold_slider.valueChanged.connect(
-            lambda v: self.threshold_val_label.setText(f"{v / 100:.2f}")
-        )
-        threshold_box.addWidget(self.threshold_slider)
-        threshold_box.addWidget(self.threshold_val_label)
-        search_layout.addRow("Similarity Threshold:", threshold_box)
-
-        main_layout.addWidget(search_group)
-
-        # 4. Live Indexing Progress Group
-        indexing_group = QGroupBox("Database Indexing & Live Status")
+        # Indexing Controls & Live Status Group
+        indexing_group = QGroupBox("Indexing Controls && Live Status")
         indexing_layout = QVBoxLayout(indexing_group)
 
         status_header_box = QHBoxLayout()
         self.stats_label = QLabel("Loading database status...")
+        self.stats_label.setStyleSheet("font-weight: bold;")
 
         self.clear_tasks_btn = QPushButton("Clear Finished")
         self.clear_tasks_btn.setIcon(QIcon.fromTheme("edit-clear"))
@@ -482,38 +411,200 @@ class SettingsDialog(QDialog):
         # Scrollable container for stacked multi-task progress items
         self.tasks_scroll = QScrollArea()
         self.tasks_scroll.setWidgetResizable(True)
-        self.tasks_scroll.setMinimumHeight(65)
-        self.tasks_scroll.setMaximumHeight(200)
+        self.tasks_scroll.setMinimumHeight(110)
         self.tasks_scroll.setVisible(False)
-        self.tasks_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.tasks_scroll.setFrameShape(QFrame.Shape.StyledPanel)
 
         self.tasks_container = QWidget()
         self.tasks_layout = QVBoxLayout(self.tasks_container)
-        self.tasks_layout.setContentsMargins(0, 4, 0, 4)
+        self.tasks_layout.setContentsMargins(4, 4, 4, 4)
         self.tasks_layout.setSpacing(6)
         self.tasks_layout.addStretch()
 
         self.tasks_scroll.setWidget(self.tasks_container)
         indexing_layout.addWidget(self.tasks_scroll)
 
-        main_layout.addWidget(indexing_group)
+        layout.addWidget(indexing_group)
+        return widget
 
-        # Bottom Action Buttons
-        btn_box = QHBoxLayout()
-        btn_box.addStretch()
-        self.close_btn = QPushButton("Close")
-        self.close_btn.clicked.connect(self.reject)
+    def _build_exclusions_tab(self) -> QWidget:
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(12)
 
-        self.save_btn = QPushButton("Save Settings")
-        self.save_btn.setIcon(QIcon.fromTheme("document-save"))
-        self.save_btn.setDefault(True)
-        self.save_btn.clicked.connect(self._on_save)
+        # Predefined Exclusion Presets
+        preset_group = QGroupBox("Predefined Exclusion Presets (Checked = Ignored)")
+        preset_layout = QVBoxLayout(preset_group)
 
-        btn_box.addWidget(self.close_btn)
-        btn_box.addWidget(self.save_btn)
-        main_layout.addLayout(btn_box)
+        preset_grid = QGridLayout()
+        preset_grid.setHorizontalSpacing(24)
+        preset_grid.setVerticalSpacing(8)
+        self.preset_checkboxes: dict[str, QCheckBox] = {}
+        row, col = 0, 0
+        for key, info in PRESET_EXCLUDES.items():
+            cb = QCheckBox(info["label"])
+            self.preset_checkboxes[key] = cb
+            preset_grid.addWidget(cb, row, col)
+            col += 1
+            if col >= 2:
+                col = 0
+                row += 1
+        preset_layout.addLayout(preset_grid)
+        layout.addWidget(preset_group)
 
-        self._refresh_stats()
+        # Custom Regular Expression Exclusion Patterns
+        custom_group = QGroupBox("Custom Regular Expression Exclusion Patterns")
+        custom_layout = QVBoxLayout(custom_group)
+
+        tip_label = QLabel(
+            "💡 Checked patterns are excluded from indexing. "
+            "Patterns match file or directory names and paths (e.g. \\.tmp$, secret_.*, or (^|/)cache(/|$))."
+        )
+        tip_label.setStyleSheet("color: #666; font-size: 11px;")
+        tip_label.setWordWrap(True)
+        custom_layout.addWidget(tip_label)
+
+        self.custom_exclude_list = QListWidget()
+        self.custom_exclude_list.setMinimumHeight(170)
+        custom_layout.addWidget(self.custom_exclude_list)
+
+        pattern_btn_layout = QHBoxLayout()
+        self.new_pattern_edit = QLineEdit()
+        self.new_pattern_edit.setPlaceholderText(r"Enter regex pattern (e.g. \.tmp$ or secret_.*)")
+        self.new_pattern_edit.returnPressed.connect(self._on_add_custom_pattern)
+
+        self.add_pattern_btn = QPushButton("Add Pattern")
+        self.add_pattern_btn.setIcon(QIcon.fromTheme("list-add"))
+        self.add_pattern_btn.clicked.connect(self._on_add_custom_pattern)
+
+        self.remove_pattern_btn = QPushButton("Remove Selected")
+        self.remove_pattern_btn.setIcon(QIcon.fromTheme("list-remove"))
+        self.remove_pattern_btn.clicked.connect(self._on_remove_custom_pattern)
+
+        pattern_btn_layout.addWidget(self.new_pattern_edit)
+        pattern_btn_layout.addWidget(self.add_pattern_btn)
+        pattern_btn_layout.addWidget(self.remove_pattern_btn)
+        custom_layout.addLayout(pattern_btn_layout)
+
+        layout.addWidget(custom_group)
+        return widget
+
+    def _build_model_tab(self) -> QWidget:
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(12)
+
+        # Hardware selection
+        hw_group = QGroupBox("Inference Device")
+        hw_layout = QFormLayout(hw_group)
+
+        self.device_combo = QComboBox()
+        detected = detect_device()
+        self.device_combo.addItem(f"Auto (Recommended — Detected: {detected.upper()})", "auto")
+        self.device_combo.addItem("CUDA GPU (NVIDIA Hardware Acceleration)", "cuda")
+        self.device_combo.addItem("CPU (Pure CPU Mode)", "cpu")
+        hw_layout.addRow("Compute Device:", self.device_combo)
+        layout.addWidget(hw_group)
+
+        # Embedding Model settings
+        model_group = QGroupBox("Embedding Model (EmbeddingGemma 2)")
+        model_layout = QFormLayout(model_group)
+
+        model_file_layout = QHBoxLayout()
+        self.model_path_edit = QLineEdit()
+        self.model_path_edit.textChanged.connect(self._check_model_status)
+        self.browse_model_btn = QPushButton("Browse...")
+        self.browse_model_btn.setIcon(QIcon.fromTheme("document-open"))
+        self.browse_model_btn.clicked.connect(self._on_browse_model)
+
+        model_file_layout.addWidget(self.model_path_edit)
+        model_file_layout.addWidget(self.browse_model_btn)
+        model_layout.addRow("Model File (.gguf):", model_file_layout)
+
+        download_box = QHBoxLayout()
+        self.model_status_label = QLabel()
+        self.download_model_btn = QPushButton("Download EmbeddingGemma 2 (333 MB)")
+        self.download_model_btn.setIcon(QIcon.fromTheme("download"))
+        self.download_model_btn.clicked.connect(self._on_download_model)
+
+        self.download_progress = QProgressBar()
+        self.download_progress.setVisible(False)
+
+        download_box.addWidget(self.model_status_label)
+        download_box.addWidget(self.download_model_btn)
+        download_box.addWidget(self.download_progress)
+        download_box.addStretch()
+        model_layout.addRow("Model Status:", download_box)
+
+        layout.addWidget(model_group)
+
+        # Architecture Specifications Card
+        info_group = QGroupBox("Architecture Specifications")
+        info_layout = QVBoxLayout(info_group)
+        info_text = QLabel(
+            "• <b>Model:</b> Google EmbeddingGemma 300M (Q8_0 quantized GGUF)<br>"
+            "• <b>Vector Dimension:</b> 768 dimensions (L2 normalized for cosine similarity)<br>"
+            "• <b>Storage Engine:</b> SQLite with sqlite-vec extension (Cosine distance KNN)<br>"
+            "• <b>Hardware Offload:</b> Fully accelerated via cuBLAS and CUDA v12 runtime"
+        )
+        info_text.setTextFormat(Qt.TextFormat.RichText)
+        info_layout.addWidget(info_text)
+        layout.addWidget(info_group)
+
+        layout.addStretch()
+        return widget
+
+    def _build_search_tab(self) -> QWidget:
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(12)
+
+        # Search Matching Parameters
+        search_group = QGroupBox("Search Matching Parameters")
+        search_layout = QFormLayout(search_group)
+
+        self.max_results_spin = QSpinBox()
+        self.max_results_spin.setRange(1, 25)
+        self.max_results_spin.setValue(5)
+        search_layout.addRow("Maximum Match Results:", self.max_results_spin)
+
+        threshold_box = QHBoxLayout()
+        self.threshold_slider = QSlider(Qt.Orientation.Horizontal)
+        self.threshold_slider.setRange(10, 90)
+        self.threshold_slider.setValue(55)
+        self.threshold_val_label = QLabel("0.55")
+        self.threshold_val_label.setStyleSheet("font-weight: bold; min-width: 36px;")
+        self.threshold_slider.valueChanged.connect(
+            lambda v: self.threshold_val_label.setText(f"{v / 100:.2f}")
+        )
+        threshold_box.addWidget(self.threshold_slider)
+        threshold_box.addWidget(self.threshold_val_label)
+        search_layout.addRow("Similarity Threshold:", threshold_box)
+
+        thresh_hint = QLabel("Lower threshold = broader fuzzy matches. Higher threshold = stricter semantic relevance.")
+        thresh_hint.setStyleSheet("color: #666; font-size: 11px;")
+        search_layout.addRow("", thresh_hint)
+
+        layout.addWidget(search_group)
+
+        # KRunner Usage Guide
+        guide_group = QGroupBox("How to Search in KDE Plasma KRunner")
+        guide_layout = QVBoxLayout(guide_group)
+        guide_text = QLabel(
+            "• Open KRunner with <b>Alt + Space</b> or <b>Alt + F2</b>.<br>"
+            "• Type <b>sem: &lt;query&gt;</b> (e.g. <code>sem: machine learning notes</code> or <code>sem: invoice 2026</code>).<br>"
+            "• Direct queries also match semantically when natural language patterns are used.<br>"
+            "• Press <b>Enter</b> to instantly open the matched document or file."
+        )
+        guide_text.setTextFormat(Qt.TextFormat.RichText)
+        guide_layout.addWidget(guide_text)
+        layout.addWidget(guide_group)
+
+        layout.addStretch()
+        return widget
 
     def _load_values(self):
         """Populate UI widgets with configuration values."""

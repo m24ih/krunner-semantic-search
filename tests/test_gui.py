@@ -175,3 +175,20 @@ def test_gui_model_status_and_exclusions(qapp):
         dialog._on_save(quiet=True)
         assert dialog.config.index_hidden_files is False
         assert len(dialog.config.custom_excludes) == 2
+
+
+def test_tabbed_ui_structure(qapp):
+    """Test that SettingsDialog properly instantiates the 4 tabs and navigates between them."""
+    dialog = SettingsDialog(config=Config())
+    assert dialog.tab_widget.count() == 4
+    tab_names = [dialog.tab_widget.tabText(i) for i in range(4)]
+    assert any("Folders" in t for t in tab_names)
+    assert any("Exclusion" in t for t in tab_names)
+    assert any("Model" in t for t in tab_names)
+    assert any("Search" in t for t in tab_names)
+
+    # Test tab switching
+    for i in range(4):
+        dialog.tab_widget.setCurrentIndex(i)
+        assert dialog.tab_widget.currentIndex() == i
+

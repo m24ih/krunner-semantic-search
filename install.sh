@@ -62,14 +62,15 @@ cp "${REPO_DIR}/desktop/plasma-runner-semantic.desktop" "${DBUS_PLUGINS_DIR}/pla
 echo -e "  Installed ${GREEN}${DBUS_PLUGINS_DIR}/plasma-runner-semantic.desktop${NC}"
 
 # Application launcher
-sed "s|/home/melih/Projects/krunner-semantic-search/.venv/bin/krunner-semantic-config|${BIN_DIR}/krunner-semantic-config|g" \
+sed "s|Exec=krunner-semantic-config|Exec=${BIN_DIR}/krunner-semantic-config|g" \
     "${REPO_DIR}/desktop/krunner-semantic-config.desktop" > "${APPLICATIONS_DIR}/krunner-semantic-config.desktop"
 chmod +x "${APPLICATIONS_DIR}/krunner-semantic-config.desktop"
 echo -e "  Installed ${GREEN}${APPLICATIONS_DIR}/krunner-semantic-config.desktop${NC}"
 
 # 5. Setup Systemd User Service
 echo -e "\n${YELLOW}[5/6] Configuring systemd background daemon...${NC}"
-cp "${REPO_DIR}/systemd/user/krunner-semantic.service" "${SYSTEMD_USER_DIR}/krunner-semantic.service"
+sed "s|ExecStart=/usr/bin/krunner-semantic-daemon|ExecStart=${BIN_DIR}/krunner-semantic-daemon|g" \
+    "${REPO_DIR}/systemd/user/krunner-semantic.service" > "${SYSTEMD_USER_DIR}/krunner-semantic.service"
 systemctl --user daemon-reload
 systemctl --user enable --now krunner-semantic.service
 echo -e "  Enabled and started ${GREEN}krunner-semantic.service${NC}"

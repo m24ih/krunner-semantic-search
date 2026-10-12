@@ -64,12 +64,24 @@ yay -S krunner-semantic-search-git
 paru -S krunner-semantic-search-git
 ```
 
-### Option 2: Universal One-Liner (Any Linux Distribution)
+### Option 2: Fedora (COPR)
+```bash
+sudo dnf copr enable m24ih/krunner-semantic-search
+sudo dnf install krunner-semantic-search
+```
+
+### Option 3: Terra / Ultramarine Linux
+```bash
+# Ultramarine Linux or Fedora with Terra repository enabled:
+sudo dnf install krunner-semantic-search
+```
+
+### Option 4: Universal One-Liner (Any Linux Distribution)
 ```bash
 curl -sSL https://raw.githubusercontent.com/m24ih/krunner-semantic-search/main/install.sh | bash
 ```
 
-### Option 3: Manual Installation (From Source)
+### Option 5: Manual Installation (From Source)
 ```bash
 git clone https://github.com/m24ih/krunner-semantic-search.git
 cd krunner-semantic-search

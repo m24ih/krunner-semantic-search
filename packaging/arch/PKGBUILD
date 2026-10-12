@@ -13,6 +13,7 @@ depends=(
     'python-pillow'
     'plasma-workspace'
     'krunner'
+    'cuda'
 )
 makedepends=(
     'git'
@@ -22,7 +23,7 @@ makedepends=(
     'python-wheel'
 )
 optdepends=(
-    'cuda: NVIDIA GPU inference acceleration (CUDA)'
+    'cudnn: NVIDIA cuDNN deep learning acceleration library'
     'rocm-hip-runtime: AMD GPU inference acceleration (ROCm)'
 )
 provides=('krunner-semantic-search')
